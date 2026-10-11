@@ -1,12 +1,11 @@
 
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 from datetime import datetime
 from io import BytesIO
 
 # ==================================================
-# 1. CẤU HÌNH ỨNG DỤNG
+# 1. CẤU HÌNH GIAO DIỆN
 # ==================================================
 st.set_page_config(
     page_title="Tính lãi tiết kiệm ngân hàng",
@@ -16,86 +15,57 @@ st.set_page_config(
 
 st.title("🏦 ỨNG DỤNG TÍNH LÃI TIẾT KIỆM NGÂN HÀNG")
 st.caption(
-    "Tính lãi đơn, lãi kép, bảng tăng trưởng, "
-    "biểu đồ và xuất báo cáo Excel."
+    "Tính toán lãi đơn, lãi kép, so sánh lợi nhuận "
+    "và xuất báo cáo tiền gửi tiết kiệm."
 )
 
 st.divider()
 
 
 # ==================================================
-# 2. HÀM HỖ TRỢ
+# 2. CÁC HÀM HỖ TRỢ
 # ==================================================
 def format_vnd(value):
+    """Định dạng số tiền theo kiểu Việt Nam."""
     return f"{value:,.0f} VNĐ".replace(",", ".")
 
 
 def simple_interest(principal, annual_rate, months):
+    """Tính lãi đơn theo lãi suất năm."""
     interest = principal * annual_rate * months / 12
     return interest, principal + interest
 
 
 def compound_balance(principal, annual_rate, months, cycle_months):
+    """
+    Tính số dư lãi kép tại một thời điểm.
+    Lãi được nhập gốc theo chu kỳ đã chọn.
+    Phần thời gian chưa đủ một chu kỳ được tính
+    lãi theo tỷ lệ số tháng còn lại.
+    """
     full_periods = months // cycle_months
     remaining_months = months % cycle_months
 
     period_rate = annual_rate * cycle_months / 12
-
     balance = principal * (1 + period_rate) ** full_periods
 
-    # Tính lãi cho phần tháng lẻ chưa đủ một chu kỳ
+    # Lãi tích lũy trong chu kỳ chưa hoàn tất
     balance *= 1 + annual_rate * remaining_months / 12
 
     return balance
 
 
-def make_excel_bytes(report_df, growth_df):
-    output = BytesIO()
-
-    with pd.ExcelWriter(
-        output,
-        engine="openpyxl"
-    ) as writer:
-
-        report_df.to_excel(
-            writer,
-            sheet_name="Bao cao tong hop",
-            index=False
-        )
-
-        growth_df.to_excel(
-            writer,
-            sheet_name="Bang tang truong",
-            index=False
-        )
-
-        # Định dạng các sheet Excel
-        for sheet in writer.sheets.values():
-            sheet.freeze_panes = "A2"
-            sheet.auto_filter.ref = sheet.dimensions
-
-            for cells in sheet.columns:
-                max_length = max(
-                    len(str(cell.value or ""))
-                    for cell in cells
-                )
-
-                letter = cells[0].column_letter
-
-                sheet.column_dimensions[letter].width = min(
-                    max_length + 3, 40
-                )
-
-    return output.getvalue()
+def make_csv_bytes(dataframe):
+    """Xuất CSV để Excel tách cột đúng."""
+    return dataframe.to_csv(index=False).encode("utf-8-sig")
 
 
 # ==================================================
-# 3. THÔNG TIN KHÁCH HÀNG
+# 3. NHẬP THÔNG TIN KHÁCH HÀNG
 # ==================================================
 st.header("1. Thông tin khách hàng")
 
 with st.container(border=True):
-
     customer_name = st.text_input(
         "Tên khách hàng",
         placeholder="Ví dụ: Nguyễn Văn A"
@@ -106,19 +76,21 @@ with st.container(border=True):
     with col1:
         principal = st.number_input(
             "Số tiền gửi ban đầu (VNĐ)",
-            min_value=100000,
-            max_value=1000000000000,
-            value=10000000,
-            step=1000000
+            min_value=100000.0,
+            max_value=1000000000000.0,
+            value=10000000.0,
+            step=1000000.0,
+            format="%.0f"
         )
 
     with col2:
         annual_rate_percent = st.number_input(
-            "Lãi suất năm (%/năm)",
+            "Lãi suất năm (%)",
             min_value=0.0,
             max_value=100.0,
             value=6.0,
-            step=0.1
+            step=0.1,
+            format="%.2f"
         )
 
     term_options = {
@@ -136,29 +108,25 @@ with st.container(border=True):
 
     term_label = st.selectbox(
         "Kỳ hạn gửi tiết kiệm",
-        list(term_options.keys()),
+        options=list(term_options.keys()),
         index=4
     )
 
     term_months = term_options[term_label]
 
-    start_date = st.date_input(
-        "Ngày bắt đầu gửi",
-        value=datetime.now().date()
-    )
-
     st.caption(
-        f"Kỳ hạn: {term_months} tháng."
+        f"Kỳ hạn được chọn: {term_months} tháng "
+        f"({term_months / 12:g} năm)."
     )
 
 
 # ==================================================
-# 4. PHƯƠNG PHÁP TÍNH LÃI
+# 4. CHỌN PHƯƠNG PHÁP TÍNH LÃI
 # ==================================================
 st.header("2. Phương pháp tính lãi")
 
 interest_method = st.radio(
-    "Chọn phương pháp tính",
+    "Chọn phương pháp chính muốn sử dụng",
     ["Lãi đơn", "Lãi kép"],
     horizontal=True
 )
@@ -172,17 +140,17 @@ cycle_options = {
 
 cycle_label = st.selectbox(
     "Chu kỳ nhập lãi vào gốc (dùng cho lãi kép)",
-    list(cycle_options.keys()),
+    options=list(cycle_options.keys()),
+    index=0,
     disabled=(interest_method != "Lãi kép")
 )
 
 cycle_months = cycle_options[cycle_label]
 
 st.info(
-    "Lãi đơn tính lãi trên gốc ban đầu. "
-    "Lãi kép nhập lãi vào gốc theo chu kỳ đã chọn. "
-    "Kết quả là mô phỏng, có thể khác cách tính thực tế "
-    "của từng ngân hàng."
+    "Lãi đơn: tiền lãi tính trên số tiền gốc ban đầu. "
+    "Lãi kép: tiền lãi được cộng vào gốc theo chu kỳ, "
+    "sau đó tiếp tục sinh lãi."
 )
 
 
@@ -192,53 +160,53 @@ st.info(
 annual_rate = annual_rate_percent / 100
 
 simple_interest_value, simple_total = simple_interest(
-    principal,
-    annual_rate,
-    term_months
+    principal, annual_rate, term_months
 )
 
 compound_total = compound_balance(
-    principal,
-    annual_rate,
-    term_months,
-    cycle_months
+    principal, annual_rate, term_months, cycle_months
 )
 
 compound_interest_value = compound_total - principal
 
-interest_difference = (
-    compound_interest_value - simple_interest_value
-)
-
+interest_difference = compound_interest_value - simple_interest_value
 total_difference = compound_total - simple_total
 
-if interest_method == "Lãi đơn":
-    selected_interest = simple_interest_value
-    selected_total = simple_total
-else:
-    selected_interest = compound_interest_value
-    selected_total = compound_total
+selected_interest = (
+    simple_interest_value
+    if interest_method == "Lãi đơn"
+    else compound_interest_value
+)
+
+selected_total = (
+    simple_total
+    if interest_method == "Lãi đơn"
+    else compound_total
+)
 
 
 # ==================================================
-# 6. KẾT QUẢ TÍNH TOÁN
+# 6. HIỂN THỊ KẾT QUẢ
 # ==================================================
 st.header("3. Kết quả tính toán")
 
 if not customer_name.strip():
-    st.warning("Vui lòng nhập tên khách hàng.")
+    st.warning(
+        "Bạn chưa nhập tên khách hàng. "
+        "Hãy nhập tên để hoàn thiện báo cáo."
+    )
 
 col1, col2, col3 = st.columns(3)
 
 with col1:
     st.metric(
-        "Tiền gốc ban đầu",
+        "Tiền gửi ban đầu",
         format_vnd(principal)
     )
 
 with col2:
     st.metric(
-        "Tiền lãi dự kiến",
+        "Tiền lãi theo phương pháp đã chọn",
         format_vnd(selected_interest)
     )
 
@@ -253,47 +221,54 @@ st.subheader("So sánh lãi đơn và lãi kép")
 compare1, compare2 = st.columns(2)
 
 with compare1:
-    st.markdown("### Lãi đơn")
-
+    st.markdown("**Lãi đơn**")
     st.metric(
         "Tiền lãi",
         format_vnd(simple_interest_value)
     )
-
     st.metric(
         "Tổng tiền cuối kỳ",
         format_vnd(simple_total)
     )
 
 with compare2:
-    st.markdown(f"### Lãi kép — {cycle_label}")
-
+    st.markdown(f"**Lãi kép — {cycle_label}**")
     st.metric(
         "Tiền lãi",
         format_vnd(compound_interest_value),
         delta=format_vnd(interest_difference)
     )
-
     st.metric(
         "Tổng tiền cuối kỳ",
         format_vnd(compound_total),
         delta=format_vnd(total_difference)
     )
 
+if total_difference > 0:
+    st.success(
+        f"Trong mô hình này, lãi kép tạo ra tổng tiền cao hơn "
+        f"lãi đơn {format_vnd(total_difference)}."
+    )
+elif total_difference < 0:
+    st.warning(
+        f"Lãi đơn cao hơn lãi kép "
+        f"{format_vnd(abs(total_difference))}."
+    )
+else:
+    st.info("Hai phương pháp cho kết quả bằng nhau.")
+
 
 # ==================================================
-# 7. BẢNG TĂNG TRƯỞNG TIỀN GỬI
+# 7. LẬP BẢNG TĂNG TRƯỞNG THEO THÁNG
 # ==================================================
 st.header("4. Bảng tăng trưởng tiền gửi")
 
 rows = []
 
 for month in range(term_months + 1):
-
     simple_interest_month = (
         principal * annual_rate * month / 12
     )
-
     simple_balance_month = (
         principal + simple_interest_month
     )
@@ -324,16 +299,15 @@ for month in range(term_months + 1):
 
 growth_df = pd.DataFrame(rows)
 
-# Hiển thị tiền theo định dạng Việt Nam
 display_df = growth_df.copy()
 
 money_columns = [
-    column for column in display_df.columns
-    if "(VNĐ)" in column
+    col for col in display_df.columns
+    if "(VNĐ)" in col
 ]
 
-for column in money_columns:
-    display_df[column] = display_df[column].map(format_vnd)
+for col in money_columns:
+    display_df[col] = display_df[col].map(format_vnd)
 
 st.dataframe(
     display_df,
@@ -343,161 +317,92 @@ st.dataframe(
 
 
 # ==================================================
-# 8. BIỂU ĐỒ TĂNG TRƯỞNG TIỀN GỬI
+# 8. BIỂU ĐỒ TĂNG TRƯỞNG
 # ==================================================
 st.header("5. Biểu đồ tăng trưởng tiền gửi")
 
-chart_df = growth_df[
+chart_df = growth_df.set_index("Tháng")[
     [
-        "Tháng",
         "Tổng tiền theo lãi đơn (VNĐ)",
         "Tổng tiền theo lãi kép (VNĐ)"
     ]
-].melt(
-    id_vars="Tháng",
-    var_name="Phương pháp",
-    value_name="Tổng tiền (VNĐ)"
-)
+]
 
-fig = px.line(
-    chart_df,
-    x="Tháng",
-    y="Tổng tiền (VNĐ)",
-    color="Phương pháp",
-    markers=True,
-    title="So sánh tăng trưởng tiền gửi theo tháng",
-    labels={
-        "Tháng": "Tháng gửi",
-        "Tổng tiền (VNĐ)": "Tổng tiền (VNĐ)",
-        "Phương pháp": "Phương pháp tính"
-    }
-)
-
-fig.update_layout(
-    hovermode="x unified",
-    legend_title_text="Phương pháp tính",
-    xaxis=dict(dtick=1)
-)
-
-fig.update_yaxes(
-    tickformat=",.0f"
-)
-
-st.plotly_chart(
-    fig,
-    use_container_width=True
-)
+st.line_chart(chart_df)
 
 st.caption(
-    "Biểu đồ tự động cập nhật theo số tiền gốc, "
-    "lãi suất, kỳ hạn và chu kỳ nhập lãi đã chọn."
+    "Biểu đồ so sánh tổng tiền tích lũy theo từng tháng "
+    "với cùng số vốn, lãi suất và kỳ hạn."
 )
 
 
 # ==================================================
 # 9. BÁO CÁO TỔNG HỢP
 # ==================================================
-st.header("6. Báo cáo tổng hợp")
+st.header("6. Xuất báo cáo")
 
 report_df = pd.DataFrame([
-    {
-        "Thông tin": "Tên khách hàng",
-        "Giá trị": customer_name.strip() or "Chưa nhập"
-    },
-    {
-        "Thông tin": "Ngày lập báo cáo",
-        "Giá trị": datetime.now().strftime("%d/%m/%Y %H:%M")
-    },
-    {
-        "Thông tin": "Ngày bắt đầu gửi",
-        "Giá trị": start_date.strftime("%d/%m/%Y")
-    },
-    {
-        "Thông tin": "Ngày đáo hạn dự kiến",
-        "Giá trị": (
-            start_date + pd.DateOffset(months=term_months)
-        ).strftime("%d/%m/%Y")
-    },
-    {
-        "Thông tin": "Tiền gốc ban đầu (VNĐ)",
-        "Giá trị": round(principal, 2)
-    },
-    {
-        "Thông tin": "Lãi suất năm (%)",
-        "Giá trị": annual_rate_percent
-    },
-    {
-        "Thông tin": "Kỳ hạn",
-        "Giá trị": term_label
-    },
-    {
-        "Thông tin": "Phương pháp được chọn",
-        "Giá trị": interest_method
-    },
-    {
-        "Thông tin": "Chu kỳ nhập lãi vào gốc",
-        "Giá trị": cycle_label if interest_method == "Lãi kép" else "Không áp dụng"
-    },
-    {
-        "Thông tin": "Tiền lãi theo lãi đơn (VNĐ)",
-        "Giá trị": round(simple_interest_value, 2)
-    },
-    {
-        "Thông tin": "Tổng tiền theo lãi đơn (VNĐ)",
-        "Giá trị": round(simple_total, 2)
-    },
-    {
-        "Thông tin": "Tiền lãi theo lãi kép (VNĐ)",
-        "Giá trị": round(compound_interest_value, 2)
-    },
-    {
-        "Thông tin": "Tổng tiền theo lãi kép (VNĐ)",
-        "Giá trị": round(compound_total, 2)
-    },
-    {
-        "Thông tin": "Tổng tiền theo phương pháp đã chọn (VNĐ)",
-        "Giá trị": round(selected_total, 2)
-    }
+    {"Thông tin": "Tên khách hàng",
+     "Giá trị": customer_name.strip() or "Chưa nhập"},
+    {"Thông tin": "Ngày lập báo cáo",
+     "Giá trị": datetime.now().strftime("%d/%m/%Y %H:%M")},
+    {"Thông tin": "Số tiền gửi ban đầu (VNĐ)",
+     "Giá trị": round(principal, 2)},
+    {"Thông tin": "Lãi suất năm (%)",
+     "Giá trị": annual_rate_percent},
+    {"Thông tin": "Kỳ hạn",
+     "Giá trị": term_label},
+    {"Thông tin": "Phương pháp được chọn",
+     "Giá trị": interest_method},
+    {"Thông tin": "Chu kỳ nhập lãi vào gốc",
+     "Giá trị": cycle_label},
+    {"Thông tin": "Tiền lãi theo lãi đơn (VNĐ)",
+     "Giá trị": round(simple_interest_value, 2)},
+    {"Thông tin": "Tổng tiền theo lãi đơn (VNĐ)",
+     "Giá trị": round(simple_total, 2)},
+    {"Thông tin": "Tiền lãi theo lãi kép (VNĐ)",
+     "Giá trị": round(compound_interest_value, 2)},
+    {"Thông tin": "Tổng tiền theo lãi kép (VNĐ)",
+     "Giá trị": round(compound_total, 2)},
+    {"Thông tin": "Chênh lệch tổng tiền lãi kép - lãi đơn (VNĐ)",
+     "Giá trị": round(total_difference, 2)},
+    {"Thông tin": "Tổng tiền theo phương pháp đã chọn (VNĐ)",
+     "Giá trị": round(selected_total, 2)}
 ])
 
+st.subheader("Xem trước báo cáo tổng hợp")
 st.dataframe(
     report_df,
     use_container_width=True,
     hide_index=True
 )
 
+col_download1, col_download2 = st.columns(2)
 
-# ==================================================
-# 10. XUẤT BÁO CÁO EXCEL
-# ==================================================
-st.header("7. Tải báo cáo")
+with col_download1:
+    st.download_button(
+        label="📄 Tải báo cáo tổng hợp CSV",
+        data=make_csv_bytes(report_df),
+        file_name="bao_cao_tiet_kiem.csv",
+        mime="text/csv",
+        use_container_width=True
+    )
 
-excel_data = make_excel_bytes(
-    report_df,
-    growth_df
-)
+with col_download2:
+    st.download_button(
+        label="📊 Tải bảng tăng trưởng CSV",
+        data=make_csv_bytes(growth_df),
+        file_name="bang_tang_truong_tiet_kiem.csv",
+        mime="text/csv",
+        use_container_width=True
+    )
 
-st.download_button(
-    label="📊 TẢI BÁO CÁO EXCEL (.xlsx)",
-    data=excel_data,
-    file_name="bao_cao_tiet_kiem.xlsx",
-    mime=(
-        "application/vnd.openxmlformats-officedocument."
-        "spreadsheetml.sheet"
-    ),
-    use_container_width=True
-)
-
-
-# ==================================================
-# 11. GHI CHÚ
-# ==================================================
 st.divider()
 
 st.caption(
     "Lưu ý: Đây là công cụ mô phỏng tài chính. "
-    "Lãi suất do người dùng nhập, không phải cam kết "
-    "của bất kỳ ngân hàng nào. Kết quả thực tế có thể "
-    "khác do quy tắc tính lãi, ngày gửi, ngày đáo hạn, "
-    "làm tròn và điều kiện rút trước hạn."
+    "Kết quả được tính theo lãi suất năm do người dùng nhập, "
+    "không đại diện cho cam kết của bất kỳ ngân hàng nào. "
+    "Sản phẩm tiền gửi thực tế có thể áp dụng quy tắc tính lãi "
+    "và làm tròn khác."
 )
