@@ -56,8 +56,9 @@ def compound_balance(principal, annual_rate, months, cycle_months):
 
 
 def make_csv_bytes(dataframe):
-    """Xuất CSV để Excel tách cột đúng."""
-    return dataframe.to_csv(index=False).encode("utf-8-sig")
+    """Xuất CSV với dấu chấm phẩy phân cách các cột."""
+    csv_text=dataframe.to_csv(index=False).encode("utf-8-sig")
+    return ("\ufeff"+csv_text).encode("utf-8")
 
 
 # ==================================================
