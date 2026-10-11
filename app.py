@@ -55,10 +55,16 @@ def compound_balance(principal, annual_rate, months, cycle_months):
     return balance
 
 
-def make_csv_bytes(dataframe):
-    """Xuất CSV với dấu chấm phẩy phân cách các cột."""
-    csv_text=dataframe.to_csv(index=False).encode("utf-8-sig")
-    return ("\ufeff"+csv_text).encode("utf-8")
+
+def make_excel_bytes(dataframe):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        dataframe.to_excel(
+            writer,
+            index=False,
+            sheet_name="Bang tang truong"
+        )
+    return output.getvalue()
 
 
 # ==================================================
@@ -381,22 +387,22 @@ st.dataframe(
 col_download1, col_download2 = st.columns(2)
 
 with col_download1:
-    st.download_button(
-        label="📄 Tải báo cáo tổng hợp CSV",
-        data=make_csv_bytes(report_df),
-        file_name="bao_cao_tiet_kiem.csv",
-        mime="text/csv",
-        use_container_width=True
+        st.download_button(
+    label="📗 Tải báo cáo tổng hợp Excel",
+    data=make_excel_bytes(report_df),
+    file_name="bao_cao_truong_tiet_kiem.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    use_container_width=True
     )
 
 with col_download2:
     st.download_button(
-        label="📊 Tải bảng tăng trưởng CSV",
-        data=make_csv_bytes(growth_df),
-        file_name="bang_tang_truong_tiet_kiem.csv",
-        mime="text/csv",
-        use_container_width=True
-    )
+    label="📗 Tải bảng tăng trưởng Excel",
+    data=make_excel_bytes(growth_df),
+    file_name="bang_tang_truong_tiet_kiem.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    use_container_width=True
+)
 
 st.divider()
 
