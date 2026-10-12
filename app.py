@@ -13,7 +13,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.image("banner.jpeg", use_container_width=True)
+st.image("banner.jpg", use_container_width=True)
 st.title("🏦 ỨNG DỤNG TÍNH LÃI TIẾT KIỆM NGÂN HÀNG")
 st.caption(
     "Tính toán lãi đơn, lãi kép, so sánh lợi nhuận "
