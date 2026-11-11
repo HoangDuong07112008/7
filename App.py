@@ -10,8 +10,7 @@ st.set_page_config(
 )
 
 # Chèn hình ảnh banner SmartSavings vào đầu trang
-# (Lưu ý: Bạn hãy đảm bảo file ảnh nằm cùng thư mục và đổi tên file "image_6a451a.jpg" khớp với tên thực tế trên máy bạn nhé)
-st.image("image_6a451a.jpg", use_container_width=True)
+st.image("banner.jpg", use_container_width=True)
 
 st.title("💰 Ứng Dụng Tính Toán Lãi Suất & Hoạch Định Tài Chính")
 st.markdown("---")
