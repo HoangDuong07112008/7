@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 
 # Chèn hình ảnh banner SmartSavings vào đầu trang
-st.image("image_banner jpg", use_container_width=True)
+st.image("banner.jpg", use_container_width=True)
 # Cấu hình trang
 st.set_page_config(
     page_title="App Tính Lãi Suất & Tài Chính Toàn Diện",
